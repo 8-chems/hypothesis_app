@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  statsense:
+    build: .
+    container_name: statsense
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app          # live-reload: edits to .py files reflect on browser refresh
+    restart: unless-stopped
