@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, List, Dict
 """
 wizard.py — Guided question flow that determines the correct statistical test.
 The user never sees test names unless they want to.
@@ -45,7 +46,7 @@ CONFIDENCE_LABELS = {
 }
 
 
-def run_wizard(dataset_type_hint: str | None) -> dict:
+def run_wizard(dataset_type_hint: Optional[str]) -> dict:
     """
     Runs the 3-question wizard and returns a config dict with:
     - test_id, friendly_name, technical_name

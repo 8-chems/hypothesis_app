@@ -1,0 +1,25 @@
+# Docker (local only — not needed on Streamlit Cloud)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Environments
+.env
+.venv
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+docker_log.txt
+*.log

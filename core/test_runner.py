@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, List, Dict
 """
 test_runner.py — Dispatches to the correct test based on wizard config + assumption results.
 Handles column selection UI and data extraction.
@@ -21,7 +22,7 @@ NONPARAM_FALLBACK = {
 }
 
 
-def select_columns(df: pd.DataFrame, config: dict) -> dict | None:
+def select_columns(df: pd.DataFrame, config: dict) -> Optional[dict]:
     """
     Shows column-selection UI appropriate for the test type.
     Returns a dict with the needed column refs, or None if not ready.
@@ -78,7 +79,7 @@ def select_columns(df: pd.DataFrame, config: dict) -> dict | None:
     return None
 
 
-def run_test(df: pd.DataFrame, config: dict, col_map: dict) -> tuple[dict, dict]:
+def run_test(df: pd.DataFrame, config: dict, col_map: dict) -> Tuple[dict, dict]:
     """
     Runs assumption checks then the appropriate test.
     Returns (result_dict, assumption_dict).

@@ -1,7 +1,14 @@
-streamlit>=1.32.0
+# StatSense — Streamlit Community Cloud requirements
+# Only packages directly imported by the application.
+# pingouin and statsmodels are NOT listed — they are not imported anywhere in the codebase.
+
+# Core data & stats
+numpy>=1.24.0,<3.0.0
+pandas>=2.0.0,<4.0.0
 scipy>=1.11.0
-pingouin>=0.5.4
-pandas>=2.0.0
-numpy>=1.24.0
+
+# Visualisation
 plotly>=5.18.0
-statsmodels>=0.14.0
+
+# Web app
+streamlit>=1.32.0

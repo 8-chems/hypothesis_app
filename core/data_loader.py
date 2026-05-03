@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, List, Dict
 """
 data_loader.py — handles CSV upload, manual entry, and built-in sample datasets.
 """
@@ -101,7 +102,7 @@ def _correlation():
 
 # ─── Main loader ─────────────────────────────────────────────────────────────
 
-def load_data() -> tuple[pd.DataFrame | None, str | None]:
+def load_data() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """
     Returns (dataframe, dataset_type_hint) or (None, None).
     dataset_type_hint is one of: two_groups_numeric, paired_numeric,
