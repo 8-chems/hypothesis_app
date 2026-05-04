@@ -7,6 +7,8 @@ import pandas as pd
 import streamlit as st
 from scipy.stats import norm as sci_norm
 
+from theory.estimator_guide import ESTIMATOR_PROFILES, SUBSTITUTIONS, classify_regime
+from theory.estimator_tab   import render_estimator_tab, _concept_box, _check_condition_met
 from theory.academic import (
     descriptive_stats_visual, variance_decomposition,
     normal_parameter_explorer, t_distribution_df_explorer,
@@ -81,6 +83,7 @@ def render_academy_page():
         "🪟 6 · Confidence Intervals":                "ci",
         "⚖️ 7 · p-values & Hypothesis Testing":      "pval",
         "❌ 8 · Type I & II Errors, Power":           "errors",
+        "🎰 9 · Estimator Explorer":                    "estimators_deep",
     }
 
     nav_col, content_col = st.columns([1, 3])
@@ -454,3 +457,438 @@ def _render_chapter(chapter: str):
         st.dataframe(df_power, use_container_width=True, hide_index=True)
         st.caption("Values \u2265 0.80 indicate adequate power. "
                    "Small effects (d=0.2) need n>200 to reach 80\u0025 power.")
+
+    elif chapter == "estimators_deep":
+        _academy_header(
+            "Estimator Navigator",
+            "Given data characteristics — frequency, observation type, sample size, and shape — "
+            "which estimator fits best? And when can one distribution's tools stand in for another's?",
+        )
+
+        # ── 4 dimension selectors ─────────────────────────────────────────────
+        st.markdown("#### Describe your data")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            freq_choice = st.selectbox(
+                "Event frequency",
+                ["Common (>20%)", "Moderate (5–20%)", "Rare (<5%)", "Very rare (<1%)"],
+            )
+        with c2:
+            obs_choice = st.selectbox(
+                "Observation type",
+                ["Independent draws", "Sequential / time-ordered",
+                 "Paired (same subject twice)", "Counts in intervals"],
+            )
+        with c3:
+            n_val = st.slider("Sample size (n)", 2, 500, 30)
+        with c4:
+            shape_choice = st.selectbox(
+                "Data shape",
+                ["Unknown / unchecked", "Bell-shaped (Normal)",
+                 "Skewed / asymmetric", "Binary (0/1)"],
+            )
+
+        # ── Derive flags ──────────────────────────────────────────────────────
+        is_rare      = "Rare" in freq_choice or "Very" in freq_choice
+        is_very_rare = "Very" in freq_choice
+        is_seq       = "Sequential" in obs_choice
+        is_paired_   = "Paired" in obs_choice
+        is_count     = "Counts" in obs_choice
+        is_binary_   = "Binary" in shape_choice
+        is_skewed_   = "Skewed" in shape_choice
+        is_normal_   = "Bell" in shape_choice
+        is_large_    = n_val >= 30
+        is_medium_   = 10 <= n_val < 30
+        is_small_    = n_val < 10
+
+        st.markdown("---")
+
+        # ══════════════════════════════════════════════════════════════════════
+        # PRIMARY RECOMMENDATION
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("#### Recommended estimator")
+
+        if is_seq:
+            _concept_box(
+                "AR(1) / ARMA — Autoregressive estimator",
+                "Formula:  x\u209c = \u03bc + \u03c6(x\u209c\u208b\u2081 \u2212 \u03bc) + \u03b5\u209c     \u03c6\u0302 via Yule-Walker or MLE\n\n"
+                "Sequential observations violate independence. Using x\u0304 on time-series data inflates the "
+                "effective sample size because consecutive values carry redundant information \u2014 a dangerous "
+                "mistake that produces overconfident intervals.\n\n"
+                "The AR(1) model estimates the autocorrelation \u03c6 alongside the mean. Yule-Walker "
+                "provides a moment estimator; MLE is more efficient. Check stationarity first with "
+                "an ADF test before fitting. If you only need the mean, use x\u0304 with Newey-West "
+                "HAC standard errors to correct for autocorrelation without modelling the full dynamics.",
+                "\U0001f4c8"
+            )
+            _concept_box(
+                "Why plain x\u0304 fails on sequential data",
+                "Var(x\u0304) = \u03c3\u00b2/n assumes independence. With autocorrelation \u03c6, the true variance is "
+                "\u03c3\u00b2/n \u00b7 (1+\u03c6)/(1\u2212\u03c6) \u2014 which can be many times larger. "
+                "For \u03c6=0.8 the true SE is 3\u00d7 larger than the naive estimate. "
+                "The effective sample size is n\u2009\u00b7\u2009(1\u2212\u03c6)/(1+\u03c6).",
+                "\u26a0\ufe0f"
+            )
+
+        elif is_paired_:
+            _concept_box(
+                "Mean of paired differences (d\u0304)",
+                "Formula:  d\u1d62 = x\u2082\u1d62 \u2212 x\u2081\u1d62     d\u0304 = \u03a3d\u1d62/n     CI: d\u0304 \u00b1 t*(n\u22121) \u00b7 s_d/\u221an\n\n"
+                "Paired observations share a subject-level baseline. Computing differences removes "
+                "this noise, leaving only the change signal. The variance of d\u0304 is:\n\n"
+                "Var(d\u0304) = [Var(X\u2082) + Var(X\u2081) \u2212 2\u00b7Cov(X\u2081,X\u2082)] / n\n\n"
+                "When within-subject correlation is high, Cov is large, and Var(d\u0304) is far smaller "
+                "than comparing two independent groups. This is why clinical trials use paired designs: "
+                "the same n gives much higher power.",
+                "\U0001f504"
+            )
+            if not is_large_:
+                _concept_box(
+                    "Small n paired \u2014 use Wilcoxon signed-rank instead",
+                    "With n=" + str(n_val) + " < 30, the CLT on d\u1d62 may not hold. "
+                    "The Wilcoxon signed-rank test works on ranks of |d\u1d62| without assuming Normality. "
+                    "Hodges-Lehmann pseudo-median (HL = median of all (d\u1d62+d\u2c7c)/2) is the "
+                    "matching point estimator with 95.5% asymptotic efficiency.",
+                    "\U0001f4d0"
+                )
+
+        elif is_count:
+            if is_very_rare or is_rare:
+                _concept_box(
+                    "Negative Binomial MLE \u2014 overdispersed rare counts",
+                    "\u03bc\u0302 = x\u0304     r\u0302 = x\u0304\u00b2 / (s\u00b2 \u2212 x\u0304)     (requires s\u00b2 > x\u0304)\n\n"
+                    "Rare counts often show overdispersion: Var >> Mean, because events cluster "
+                    "(contagion, heterogeneity across units). Poisson assumes Mean = Variance \u2014 "
+                    "if violated, it underestimates uncertainty and produces overconfident p-values.\n\n"
+                    "Negative Binomial adds a dispersion parameter r, fitting mean and variance independently. "
+                    "Diagnostic: compute dispersion index s\u00b2/x\u0304. If \u2248 1, Poisson is fine. "
+                    "If > 1.5, use NB. Use a likelihood ratio test to decide formally.",
+                    "\U0001f9ee"
+                )
+            else:
+                _concept_box(
+                    "Poisson MLE: \u03bb\u0302 = x\u0304",
+                    "\u03bb\u0302 = x\u0304     Var(\u03bb\u0302) = \u03bb/n     Check: s\u00b2/x\u0304 \u2248 1\n\n"
+                    "Counts of independent events in fixed intervals follow Poisson(\u03bb) "
+                    "when mean \u2248 variance. The MLE is the sample mean \u2014 it is also the "
+                    "UMVUE (uniformly minimum variance unbiased estimator) by the "
+                    "Lehmann-Scheff\u00e9 theorem: no unbiased estimator exists with smaller variance.\n\n"
+                    "Key diagnostic: dispersion index s\u00b2/x\u0304. If it exceeds 1.5, "
+                    "switch to Negative Binomial.",
+                    "\U0001f4ca"
+                )
+
+        elif is_binary_:
+            if is_very_rare:
+                _concept_box(
+                    "Exact Binomial CI (Clopper-Pearson)",
+                    "p\u0302 = k/n     CI: [Beta(\u03b1/2; k, n\u2212k+1),  Beta(1\u2212\u03b1/2; k+1, n\u2212k)]\n\n"
+                    "Very rare events + small n: the Wald interval (p\u0302 \u00b1 z\u221a(p\u0302(1\u2212p\u0302)/n)) "
+                    "can produce negative lower bounds and severe undercoverage. "
+                    "The exact method inverts the Binomial CDF using Beta quantiles. "
+                    "It is conservative (actual coverage \u2265 nominal) but always valid.",
+                    "\U0001f3af"
+                )
+            elif is_rare:
+                _concept_box(
+                    "Wilson score interval for p",
+                    "p\u0302 = k/n\n"
+                    "CI centre: (p\u0302 + z\u00b2/2n) / (1 + z\u00b2/n)\n"
+                    "CI half-width: z\u221a(p\u0302(1\u2212p\u0302)/n + z\u00b2/4n\u00b2) / (1 + z\u00b2/n)\n\n"
+                    "Wald fails for rare events (p < 0.05) even at n=200 \u2014 it has "
+                    "systematic undercoverage near p\u22480. Wilson recentres the interval "
+                    "toward 0.5 and achieves near-nominal coverage across [0,1]. "
+                    "Preferred by the American Statistical Association for proportions.",
+                    "\U0001f3af"
+                )
+            else:
+                _concept_box(
+                    "Sample proportion p\u0302 + Wilson CI",
+                    "p\u0302 = k/n     Wald CI: p\u0302 \u00b1 z\u221a(p\u0302(1\u2212p\u0302)/n)\n\n"
+                    "With np\u0302 \u2265 5 and n(1\u2212p\u0302) \u2265 5, the Normal approximation holds and Wald performs well. "
+                    "Wilson is still slightly preferable \u2014 it reduces to Wald asymptotically "
+                    "but has better coverage at moderate n. "
+                    "p\u0302 is the MLE and the UMVUE for the Binomial success probability.",
+                    "\U0001f3af"
+                )
+
+        elif is_skewed_ and is_small_:
+            _concept_box(
+                "Hodges-Lehmann estimator + Wilcoxon CI",
+                "HL = median\u007b(x\u1d62 + x\u2c7c)/2 : all i \u2264 j\u007d\n\n"
+                "Small n=" + str(n_val) + " and skewed data: the mean is pulled toward the tail and "
+                "the CLT has not activated. Hodges-Lehmann estimates the pseudo-median robustly "
+                "without any distributional assumption.\n\n"
+                "Asymptotic relative efficiency (ARE) vs. mean = 95.5% under Normality \u2014 "
+                "almost as good as the mean when data is Normal, and much better under skew. "
+                "The CI is obtained by inverting the Wilcoxon signed-rank test, giving exact coverage.",
+                "\U0001f4d0"
+            )
+
+        elif is_skewed_ and is_large_:
+            _concept_box(
+                "Sample Median + Bootstrap CI",
+                "x\u0303 = middle value     CI via B = 1000 resamples\n\n"
+                "Skewed data: the mean is pulled toward the tail and is not representative. "
+                "The median has 63.7% ARE vs. the mean for Normal data but dominates under skew.\n\n"
+                "With n=" + str(n_val) + " \u2265 30, the non-parametric bootstrap gives a valid CI "
+                "without any distributional assumption \u2014 resample with replacement B times, "
+                "compute the median each time, take the 2.5th and 97.5th percentiles.",
+                "\U0001f4c9"
+            )
+
+        else:
+            if is_large_:
+                _concept_box(
+                    "Sample Mean x\u0304 + t-interval (CLT fully valid)",
+                    "x\u0304 = \u03a3x\u1d62/n     CI: x\u0304 \u00b1 t*(n\u22121) \u00b7 s/\u221an\n\n"
+                    "n=" + str(n_val) + " \u2265 30: the CLT guarantees the sampling distribution of x\u0304 "
+                    "is approximately Normal regardless of the population's shape.\n\n"
+                    "x\u0304 is the MVUE (minimum variance unbiased estimator) for the Normal "
+                    "distribution \u2014 proven by Rao-Blackwell. Bessel's correction (n\u22121) makes s\u00b2 "
+                    "unbiased for \u03c3\u00b2. At n=" + str(n_val) + " the correction is " +
+                    f"{100/(n_val-1):.1f}%.",
+                    "\U0001f4cf"
+                )
+            elif is_medium_:
+                _concept_box(
+                    "Sample Mean x\u0304 + t-interval (CLT partial \u2014 check shape)",
+                    "x\u0304 = \u03a3x\u1d62/n     CI: x\u0304 \u00b1 t*(n\u22121) \u00b7 s/\u221an\n\n"
+                    "n=" + str(n_val) + " is in the 10\u201329 range. The CLT is partially active: "
+                    "x\u0304 is approximately Normal for symmetric data but can be skewed for "
+                    "heavily non-Normal populations.\n\n"
+                    "Recommended: check shape with a QQ plot before trusting the CI. "
+                    "If data is skewed, consider the Hodges-Lehmann estimator or bootstrap instead.",
+                    "\U0001f914"
+                )
+            else:
+                _concept_box(
+                    "Sample Mean x\u0304 + t-interval (use with caution \u2014 very small n)",
+                    "x\u0304 = \u03a3x\u1d62/n     CI: x\u0304 \u00b1 t*(n\u22121) \u00b7 s/\u221an\n\n"
+                    "n=" + str(n_val) + " is very small. The CLT has not activated. The t-interval "
+                    "assumes Normality of the raw data \u2014 not just the sampling distribution.\n\n"
+                    "Strongly recommended: use the Hodges-Lehmann estimator + Wilcoxon CI instead. "
+                    "It requires no distributional assumption and has 95.5% ARE under Normality.",
+                    "\u26a0\ufe0f"
+                )
+
+        # ══════════════════════════════════════════════════════════════════════
+        # RELIABILITY CHART
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("#### Estimator reliability as n grows")
+        st.caption("How appropriate each estimator becomes with more data, for your current settings.")
+
+        import plotly.graph_objects as go
+        # np already imported at module level
+
+        ns_plot = [2, 5, 8, 10, 15, 20, 30, 50, 100, 200, 500]
+        x_idx    = list(range(11))
+        x_labels = [f"n={n}" for n in ns_plot]
+
+        def clamp(v): return min(100, max(0, v))
+
+        mean_r   = [clamp(30 + n*0.7 if is_skewed_ else 15 + n*1.8) for n in ns_plot]
+        t_r      = [clamp(8 + n*2.0) for n in ns_plot]
+        median_r = [clamp(55 + n*0.45 if is_skewed_ else 25 + n*0.9) for n in ns_plot]
+        boot_r   = [clamp(75 + n*0.08 if n >= 20 else n*3.2) for n in ns_plot]
+        exact_r  = [88] * len(ns_plot)
+
+        fig_rel = go.Figure()
+        for label, vals, color, dash in [
+            ("Sample mean (x\u0304)",  mean_r,   "#4F8EF7", "solid"),
+            ("t-interval",            t_r,      "#34D399", "solid"),
+            ("Median",                median_r, "#A259FF", "solid"),
+            ("Bootstrap CI",          boot_r,   "#FFB347", "solid"),
+            ("Exact methods",         exact_r,  "#FF4B6E", "dash"),
+        ]:
+            fig_rel.add_trace(go.Scatter(
+                x=x_idx, y=vals,
+                mode="lines+markers", name=label,
+                line=dict(color=color, width=2, dash=dash),
+                marker=dict(size=5),
+            ))
+
+        # Mark current n
+        n_mark = n_val
+        closest_idx = min(range(len(ns_plot)), key=lambda ii: abs(ns_plot[ii] - n_val))
+        fig_rel.add_vline(
+            x=closest_idx,
+            line=dict(color="#FFB347", width=2, dash="dot"),
+            annotation_text=f"your n={n_val}",
+            annotation_font=dict(color="#FFB347", size=10),
+            annotation_position="top right",
+        )
+        fig_rel.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,18,30,0.6)",
+            height=280, margin=dict(l=45, r=20, t=30, b=40),
+            font=dict(family="IBM Plex Mono", color="#8899b0"),
+            legend=dict(font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
+            yaxis_title="Appropriateness (%)",
+        )
+        fig_rel.update_xaxes(
+            gridcolor="rgba(255,255,255,.06)", zeroline=False,
+            tickmode="array", tickvals=x_idx, ticktext=x_labels,
+            tickfont=dict(size=9),
+        )
+        fig_rel.update_yaxes(gridcolor="rgba(255,255,255,.06)", zeroline=False,
+                             range=[0, 105],
+                             ticksuffix="%")
+        st.plotly_chart(fig_rel, use_container_width=True)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # SUBSTITUTION TABLE — full 8-entry table, condition met badge
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("#### When one distribution can substitute for another")
+        st.caption(
+            "Each row shows the substitution, the mathematical condition that makes it valid, "
+            "the justification, and whether it applies to your current n and scenario."
+        )
+
+        FULL_SUBS = [
+            {
+                "from_": "Binomial(n, p)",
+                "to":    "Normal(np,\u00a0np(1\u2212p))",
+                "cond":  "n\u00b7p \u2265 5  AND  n\u00b7(1\u2212p) \u2265 5",
+                "why":   "CLT: sum of n Bernoulli(p) trials \u2192 Normal. Good for 0.1 < p < 0.9. "
+                         "Apply continuity correction (+0.5) for integer comparisons.",
+                "limit": "Fails when p \u2248 0 or p \u2248 1 even for large n",
+                "check": lambda: is_binary_ and not is_very_rare and n_val * 0.1 >= 5,
+            },
+            {
+                "from_": "Binomial(n, p)",
+                "to":    "Poisson(\u03bb = np)",
+                "cond":  "n \u2192 \u221e,  p \u2192 0,  n\u00b7p = \u03bb fixed",
+                "why":   "Large n + tiny p: most trials yield 0 \u2014 looks like rare random arrivals. "
+                         "Poisson is simpler (1 parameter). Classic use: defect counts, epidemiology.",
+                "limit": "Only valid when both n and 1/p are simultaneously large",
+                "check": lambda: is_binary_ and is_rare and n_val >= 30,
+            },
+            {
+                "from_": "Poisson(\u03bb)",
+                "to":    "Normal(\u03bb,\u00a0\u03bb)",
+                "cond":  "\u03bb \u2265 10  (\u03bb \u2265 30 for tail accuracy)",
+                "why":   "For large \u03bb, Poisson \u2248 Normal(\u03bb,\u03bb). Enables z-tests and closed-form CIs. "
+                         "The \u221ax transformation stabilises variance first.",
+                "limit": "Tails underestimated for \u03bb < 10",
+                "check": lambda: is_count and not is_rare,
+            },
+            {
+                "from_": "t(df)",
+                "to":    "Normal(0, 1)",
+                "cond":  "df \u2265 30  (df \u2265 120 for tail accuracy at \u03b1 = 0.001)",
+                "why":   "t(df) \u2192 N(0,1) as df \u2192 \u221e. For df \u2265 30 the difference in critical values "
+                         "is < 5% at \u03b1 = 0.05. t is needed when \u03c3 is estimated from data.",
+                "limit": "At \u03b1 = 0.001, convergence needs df > 200",
+                "check": lambda: not is_binary_ and not is_count and n_val >= 30,
+            },
+            {
+                "from_": "Chi-squared(k)",
+                "to":    "Normal(k,\u00a02k)",
+                "cond":  "k \u2265 30",
+                "why":   "\u03c7\u00b2(k) is a sum of k squared Normals \u2014 CLT applies. "
+                         "Wilson-Hilferty cube-root gives even better Normal approximation for moderate k.",
+                "limit": "Tails (p < 0.01) need larger k",
+                "check": lambda: n_val >= 30,
+            },
+            {
+                "from_": "Hypergeometric",
+                "to":    "Binomial(n,\u00a0K/N)",
+                "cond":  "n/N \u2264 0.05  (sample < 5% of population)",
+                "why":   "Small sample relative to population: each draw barely changes remaining proportion "
+                         "\u2014 effectively sampling with replacement. Binomial is simpler and sufficient.",
+                "limit": "If n/N > 10%, apply finite population correction \u221a((N\u2212n)/(N\u22121))",
+                "check": lambda: is_binary_ and is_large_,
+            },
+            {
+                "from_": "Negative Binomial",
+                "to":    "Poisson(\u03bb)",
+                "cond":  "Dispersion index s\u00b2/x\u0304 \u2248 1",
+                "why":   "NB reduces to Poisson as dispersion r \u2192 \u221e. "
+                         "If variance/mean ratio is close to 1, Poisson is sufficient. "
+                         "Use likelihood ratio test to decide formally.",
+                "limit": "If dispersion index > 1.5, NB is clearly needed",
+                "check": lambda: is_count and not is_rare,
+            },
+            {
+                "from_": "Beta(\u03b1, \u03b2)",
+                "to":    "Normal",
+                "cond":  "\u03b1 \u2265 5  AND  \u03b2 \u2265 5",
+                "why":   "Beta is conjugate prior for proportions (bounded [0,1]). "
+                         "Large shape parameters \u2192 approximately Normal centred at \u03b1/(\u03b1+\u03b2). "
+                         "Useful in Bayesian posterior reporting and A/B test analysis.",
+                "limit": "Near boundaries (\u03b1 or \u03b2 < 2) Normal approximation fails badly",
+                "check": lambda: is_binary_ and is_large_,
+            },
+        ]
+
+        for s in FULL_SUBS:
+            try:
+                valid = s["check"]()
+            except Exception:
+                valid = False
+
+            badge_color = "#34D399" if valid else "#8899b0"
+            badge_icon  = "\u2705" if valid else "\u2139\ufe0f"
+            badge_text  = "Valid for your scenario" if valid else "Conditions not met here"
+
+            st.markdown(f"""
+            <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);
+                        border-left:3px solid {'#34D399' if valid else 'rgba(255,255,255,.12)'};
+                        border-radius:10px;padding:1rem 1.2rem;margin-bottom:.7rem">
+                <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem;flex-wrap:wrap">
+                    <span style="font-family:'IBM Plex Mono';font-size:.75rem;
+                                 background:rgba(255,75,110,.1);border:1px solid rgba(255,75,110,.25);
+                                 color:#FF4B6E;padding:.15rem .5rem;border-radius:4px">{s['from_']}</span>
+                    <span style="color:#8899b0;font-size:.85rem">\u2192</span>
+                    <span style="font-family:'IBM Plex Mono';font-size:.75rem;
+                                 background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.25);
+                                 color:#4F8EF7;padding:.15rem .5rem;border-radius:4px">{s['to']}</span>
+                    <span style="font-family:'IBM Plex Mono';font-size:.7rem;
+                                 color:{badge_color};margin-left:auto">{badge_icon} {badge_text}</span>
+                </div>
+                <div style="font-family:'IBM Plex Mono';font-size:.72rem;
+                            color:#FFB347;margin-bottom:.4rem">Condition: {s['cond']}</div>
+                <div style="font-size:.8rem;color:#c8d0e0;line-height:1.6;margin-bottom:.3rem">{s['why']}</div>
+                <div style="font-size:.75rem;color:rgba(255,179,71,.7);font-style:italic">\u26a0 {s['limit']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # DATA REGIME SUMMARY LEGEND
+        # ══════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("#### Data regime reference")
+
+        regimes = [
+            ("#4F8EF7", "Large n (\u226530)",
+             "CLT valid. Parametric estimators appropriate even for non-Normal data. z and t intervals reliable."),
+            ("#A259FF", "Medium n (10\u201329)",
+             "CLT partial. Use t-distribution. Verify shape with QQ plot. Bootstrap viable."),
+            ("#FFB347", "Small n (<10)",
+             "CLT not valid. Non-parametric or exact methods required. All estimates uncertain."),
+            ("#34D399", "Rare events (p<5%)",
+             "Wald interval fails. Use Wilson (binary) or exact Binomial. Poisson MLE for counts."),
+            ("#FF4B6E", "Sequential data",
+             "Independence violated. Autocorrelation inflates effective n. ARMA or HAC needed."),
+            ("#F472B6", "Skewed / heavy tails",
+             "Mean pulled by extremes. Median or Hodges-Lehmann more representative."),
+        ]
+
+        cols_reg = st.columns(3)
+        for i, (color, name, desc) in enumerate(regimes):
+            with cols_reg[i % 3]:
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
+                            border-radius:10px;padding:.85rem 1rem;margin-bottom:.7rem;
+                            display:flex;align-items:flex-start;gap:.6rem">
+                    <div style="width:9px;height:9px;border-radius:50%;background:{color};
+                                flex-shrink:0;margin-top:4px"></div>
+                    <div>
+                        <div style="font-size:.82rem;font-weight:600;color:#e8eef8;margin-bottom:.18rem">{name}</div>
+                        <div style="font-size:.74rem;color:#8899b0;line-height:1.5">{desc}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+

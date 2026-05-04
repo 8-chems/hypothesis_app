@@ -21,7 +21,9 @@ from plots.diagnostic_plots   import (
     contingency_heatmap, effect_size_gauge,
 )
 from theory.cards        import get_theory_card, render_theory_card
-from theory.academy_page import render_academy_page
+from theory.academy_page   import render_academy_page
+from theory.estimator_guide import get_estimator_context
+from theory.estimator_tab   import render_estimator_tab
 
 # ─── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -389,8 +391,8 @@ def main():
     gnames  = result.get("_group_names", [])
 
     # Distribution plot
-    tab_dist, tab_data, tab_diagnostics, tab_effect = st.tabs([
-        "📊 Hypothesis test", "📈 Data explorer", "🔍 Diagnostics", "⚡ Effect size"
+    tab_dist, tab_data, tab_diagnostics, tab_effect, tab_estimator = st.tabs([
+        "📊 Hypothesis test", "📈 Data explorer", "🔍 Diagnostics", "⚡ Effect size", "🎰 Estimator"
     ])
 
     with tab_dist:
@@ -514,6 +516,10 @@ def main():
         st.markdown("**Benchmarks for this test:**")
         for size, val in thresholds.items():
             st.markdown(f"- **{size.capitalize()}** effect: ≥ {val}")
+
+    with tab_estimator:
+        est_ctx = get_estimator_context(result, assumption_result)
+        render_estimator_tab(est_ctx)
 
     st.markdown("---")
 
