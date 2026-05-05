@@ -829,31 +829,39 @@ def _render_chapter(chapter: str):
             except Exception:
                 valid = False
 
-            badge_color = "#34D399" if valid else "#8899b0"
-            badge_icon  = "\u2705" if valid else "\u2139\ufe0f"
-            badge_text  = "Valid for your scenario" if valid else "Conditions not met here"
+            # Pre-compute all dynamic values — no logic inside the HTML string
+            border_color  = "#34D399" if valid else "rgba(255,255,255,.12)"
+            badge_color   = "#34D399" if valid else "#8899b0"
+            badge_icon    = "✅" if valid else "ℹ️"
+            badge_text    = "Valid for your scenario" if valid else "Conditions not met here"
+            from_label    = s["from_"]
+            to_label      = s["to"]
+            cond_text     = s["cond"]
+            why_text      = s["why"]
+            limit_text    = s["limit"]
 
-            st.markdown(f"""
-            <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);
-                        border-left:3px solid {'#34D399' if valid else 'rgba(255,255,255,.12)'};
-                        border-radius:10px;padding:1rem 1.2rem;margin-bottom:.7rem">
-                <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem;flex-wrap:wrap">
-                    <span style="font-family:'IBM Plex Mono';font-size:.75rem;
-                                 background:rgba(255,75,110,.1);border:1px solid rgba(255,75,110,.25);
-                                 color:#FF4B6E;padding:.15rem .5rem;border-radius:4px">{s['from_']}</span>
-                    <span style="color:#8899b0;font-size:.85rem">\u2192</span>
-                    <span style="font-family:'IBM Plex Mono';font-size:.75rem;
-                                 background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.25);
-                                 color:#4F8EF7;padding:.15rem .5rem;border-radius:4px">{s['to']}</span>
-                    <span style="font-family:'IBM Plex Mono';font-size:.7rem;
-                                 color:{badge_color};margin-left:auto">{badge_icon} {badge_text}</span>
-                </div>
-                <div style="font-family:'IBM Plex Mono';font-size:.72rem;
-                            color:#FFB347;margin-bottom:.4rem">Condition: {s['cond']}</div>
-                <div style="font-size:.8rem;color:#c8d0e0;line-height:1.6;margin-bottom:.3rem">{s['why']}</div>
-                <div style="font-size:.75rem;color:rgba(255,179,71,.7);font-style:italic">\u26a0 {s['limit']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            html_card = (
+                f'<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);'
+                f'border-left:3px solid {border_color};'
+                f'border-radius:10px;padding:1rem 1.2rem;margin-bottom:.7rem">'
+                f'<div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem;flex-wrap:wrap">'
+                f'<span style="font-family:\'IBM Plex Mono\';font-size:.75rem;'
+                f'background:rgba(255,75,110,.1);border:1px solid rgba(255,75,110,.25);'
+                f'color:#FF4B6E;padding:.15rem .5rem;border-radius:4px">{from_label}</span>'
+                f'<span style="color:#8899b0;font-size:.85rem">→</span>'
+                f'<span style="font-family:\'IBM Plex Mono\';font-size:.75rem;'
+                f'background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.25);'
+                f'color:#4F8EF7;padding:.15rem .5rem;border-radius:4px">{to_label}</span>'
+                f'<span style="font-family:\'IBM Plex Mono\';font-size:.7rem;'
+                f'color:{badge_color};margin-left:auto">{badge_icon} {badge_text}</span>'
+                f'</div>'
+                f'<div style="font-family:\'IBM Plex Mono\';font-size:.72rem;'
+                f'color:#FFB347;margin-bottom:.4rem">Condition: {cond_text}</div>'
+                f'<div style="font-size:.8rem;color:#c8d0e0;line-height:1.6;margin-bottom:.3rem">{why_text}</div>'
+                f'<div style="font-size:.75rem;color:rgba(255,179,71,.7);font-style:italic">⚠ {limit_text}</div>'
+                f'</div>'
+            )
+            st.markdown(html_card, unsafe_allow_html=True)
 
         # ══════════════════════════════════════════════════════════════════════
         # DATA REGIME SUMMARY LEGEND
@@ -877,18 +885,18 @@ def _render_chapter(chapter: str):
         ]
 
         cols_reg = st.columns(3)
-        for i, (color, name, desc) in enumerate(regimes):
+        for i, (r_color, r_name, r_desc) in enumerate(regimes):
             with cols_reg[i % 3]:
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
-                            border-radius:10px;padding:.85rem 1rem;margin-bottom:.7rem;
-                            display:flex;align-items:flex-start;gap:.6rem">
-                    <div style="width:9px;height:9px;border-radius:50%;background:{color};
-                                flex-shrink:0;margin-top:4px"></div>
-                    <div>
-                        <div style="font-size:.82rem;font-weight:600;color:#e8eef8;margin-bottom:.18rem">{name}</div>
-                        <div style="font-size:.74rem;color:#8899b0;line-height:1.5">{desc}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                html_regime = (
+                    f'<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);'
+                    f'border-radius:10px;padding:.85rem 1rem;margin-bottom:.7rem;'
+                    f'display:flex;align-items:flex-start;gap:.6rem">'
+                    f'<div style="width:9px;height:9px;border-radius:50%;background:{r_color};'
+                    f'flex-shrink:0;margin-top:4px"></div>'
+                    f'<div>'
+                    f'<div style="font-size:.82rem;font-weight:600;color:#e8eef8;margin-bottom:.18rem">{r_name}</div>'
+                    f'<div style="font-size:.74rem;color:#8899b0;line-height:1.5">{r_desc}</div>'
+                    f'</div></div>'
+                )
+                st.markdown(html_regime, unsafe_allow_html=True)
 
